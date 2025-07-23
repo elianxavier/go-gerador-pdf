@@ -1,13 +1,14 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
-	"github.com/jung-kurt/gofpdf"
+	"github.com/SebastiaanKlippert/go-wkhtmltopdf"
+	"github.com/elianxavier/go-gerador-pdf/middleware"
 )
 
 type Pessoa struct {
@@ -25,14 +26,8 @@ func main() {
 	http.ListenAndServe(":8080", nil)
 }
 
-func enableCORS(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-}
-
 func handler(w http.ResponseWriter, r *http.Request) {
-	enableCORS(w, r)
+	middleware.EnableCORS(w, r)
 
 	if r.Method == http.MethodOptions {
 		w.WriteHeader(http.StatusOK)
@@ -63,54 +58,68 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pdfChan := make(chan []byte)
-	errChan := make(chan error)
+	html := construirHTML(pessoas)
+	pdfBytes, err := gerarPDFComHTML(html)
 
-	go func(p Pessoas, out chan<- []byte, errCh chan<- error) {
-		buffer, err := gerarPDFUmaPessoaPorPagina(p)
-		if err != nil {
-			errCh <- fmt.Errorf("falha ao gerar PDF: %w", err)
-			return
-		}
-		out <- buffer.Bytes()
-	}(pessoas, pdfChan, errChan)
-
-	select {
-	case pdfBytes := <-pdfChan:
-		w.Header().Set("Content-Type", "application/pdf")
-		w.Header().Set("Content-Disposition", "attachment; filename=\"relatorio_pessoas_por_pagina.pdf\"")
-		w.Write(pdfBytes)
-	case err := <-errChan:
-		http.Error(w, fmt.Sprintf("Erro interno do servidor ao gerar PDF: %s", err.Error()), http.StatusInternalServerError)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Erro ao gerar PDF: %s", err.Error()), http.StatusInternalServerError)
+		return
 	}
+
+	w.Header().Set("Content-Type", "application/pdf")
+	w.Header().Set("Content-Disposition", "attachment; filename=\"relatorio_pessoas.pdf\"")
+	w.Write(pdfBytes)
 }
 
-func gerarPDFUmaPessoaPorPagina(pessoas Pessoas) (*bytes.Buffer, error) {
-	pdf := gofpdf.New("P", "mm", "A4", "")
+func gerarPDFComHTML(html string) ([]byte, error) {
+	pdfg, err := wkhtmltopdf.NewPDFGenerator()
+
+	if err != nil {
+		return nil, err
+	}
+
+	page := wkhtmltopdf.NewPageReader(strings.NewReader(html))
+	pdfg.AddPage(page)
+
+	err = pdfg.Create()
+
+	if err != nil {
+		return nil, err
+	}
+
+	return pdfg.Bytes(), nil
+}
+
+func construirHTML(pessoas Pessoas) string {
+	var sb strings.Builder
+
+	sb.WriteString(`
+		<!DOCTYPE html>
+		<html>
+		<head>
+			<meta charset="UTF-8">
+			<style>
+				body { font-family: Arial, sans-serif; margin: 40px; }
+				.page { page-break-after: always; }
+				h2 { color: #444; }
+				p { margin: 4px 0; }
+			</style>
+		</head>
+		<body>
+	`)
 
 	for i, p := range pessoas {
-		pdf.AddPage()
-
-		pdf.SetFont("Arial", "B", 18)
-		pdf.Cell(0, 10, fmt.Sprintf("Detalhes da Pessoa %d: %s", i+1, p.Nome))
-		pdf.Ln(15)
-
-		pdf.SetFont("Arial", "", 12)
-
-		// Nome
-		pdf.CellFormat(0, 10, fmt.Sprintf("Nome: %s", p.Nome), "0", 1, "", false, 0, "")
-		// Idade
-		pdf.CellFormat(0, 10, fmt.Sprintf("Idade: %d", p.Idade), "0", 1, "", false, 0, "")
-		// Email
-		pdf.CellFormat(0, 10, fmt.Sprintf("Email: %s", p.Email), "0", 1, "", false, 0, "")
-		// Telefone
-		pdf.CellFormat(0, 10, fmt.Sprintf("Telefone: %s", p.Telefone), "0", 1, "", false, 0, "")
+		sb.WriteString(fmt.Sprintf(`
+			<div class="page">
+				<h2>Pessoa %d: %s</h2>
+				<p><strong>Nome:</strong> %s</p>
+				<p><strong>Idade:</strong> %d</p>
+				<p><strong>Email:</strong> %s</p>
+				<p><strong>Telefone:</strong> %s</p>
+			</div>
+		`, i+1, p.Nome, p.Nome, p.Idade, p.Email, p.Telefone))
 	}
 
-	var buf bytes.Buffer
-	err := pdf.Output(&buf)
-	if err != nil {
-		return nil, fmt.Errorf("falha ao escrever PDF no buffer: %w", err)
-	}
-	return &buf, nil
+	sb.WriteString("</body></html>")
+	return sb.String()
 }
