@@ -1,6 +1,7 @@
 package fichaFinanceira
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -21,11 +22,39 @@ func (r RelatorioFichaFinanceira) FromJSON(data []byte) (any, error) {
 	return servidores, err
 }
 
+func (r RelatorioFichaFinanceira) BuscarDados(db *sql.DB) (any, error) {
+	rows, err := db.Query(`SELECT Nome, CPF, SalarioBase, TotalDescontos FROM Servidores`)
+
+	if err != nil {
+		return nil, fmt.Errorf("erro ao executar a consulta: %v", err)
+	}
+	defer rows.Close()
+
+	var servidores []Servidor
+	for rows.Next() {
+		var s Servidor
+		if err := rows.Scan(&s.Nome, &s.CPF, &s.SalarioBase, &s.TotalDescontos); err != nil {
+			return nil, fmt.Errorf("erro ao ler os dados da linha: %v", err)
+		}
+		servidores = append(servidores, s)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("erro após a leitura das linhas: %v", err)
+	}
+
+	return servidores, nil
+}
+
 func (r RelatorioFichaFinanceira) GerarHTML(dados any) (string, error) {
 	servidores, ok := dados.([]Servidor)
+
 	if !ok {
-		return "", fmt.Errorf("dados inválidos")
+		return "", fmt.Errorf("dados inválidos para o relatório")
 	}
+
+	fmt.Println("Dados dos servidores recebidos para geração do HTML:")
+	fmt.Println(servidores)
 
 	var sb strings.Builder
 
@@ -37,7 +66,7 @@ func (r RelatorioFichaFinanceira) GerarHTML(dados any) (string, error) {
 			<style>
 				body { font-family: Arial, sans-serif; margin: 40px; }
 				.page { page-break-after: always; }
-				h1 { color: #444; }
+				h1 { color: red; }
 				p { margin: 4px 0; }
 			</style>
 		</head>
