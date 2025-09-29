@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/elianxavier/go-gerador-pdf/routes"
 )
@@ -11,10 +12,19 @@ import (
 func main() {
 	routes.RegistrarRotas()
 
-	port := "5555"
+	port := os.Getenv("SERVER_PORT")
+	if port == "" {
+		port = "5555"
+	}
+
 	listenAddr := ":" + port
 
-	fmt.Printf("Servidor rodando em http://localhost%s\n", listenAddr)
+	host := os.Getenv("SERVER_HOST")
+	if host == "" {
+		host = "localhost"
+	}
+
+	fmt.Printf("Servidor rodando em http://%s%s\n", host, listenAddr)
 
 	log.Fatal(http.ListenAndServe(listenAddr, nil))
 }
