@@ -17,7 +17,7 @@ String de consexão
 
     try {
         const response = await fetch(url, {
-            method: 'GET',
+            method: 'POST',
             headers: {
                 'X-DB-Connection-String': connectionString
             }

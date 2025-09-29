@@ -6,7 +6,6 @@ import (
 	"net/http"
 
 	"github.com/elianxavier/go-gerador-pdf/middleware"
-	"github.com/elianxavier/go-gerador-pdf/relatorios/folha/fichaFinanceira"
 	"github.com/elianxavier/go-gerador-pdf/relatorios/folha/holeriteBeneficio"
 	"github.com/elianxavier/go-gerador-pdf/relatorios/pessoas"
 	"github.com/elianxavier/go-gerador-pdf/services"
@@ -21,7 +20,6 @@ type GeradorRelatorio interface {
 }
 
 var relatorios = map[string]GeradorRelatorio{
-	"folha/fichaFinanceira":   fichaFinanceira.RelatorioFichaFinanceira{},
 	"folha/holeriteBeneficio": holeriteBeneficio.RelatorioHoleriteBeneficio{},
 	"pessoas":                 pessoas.RelatorioPessoas{},
 }
